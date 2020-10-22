@@ -1,0 +1,59 @@
+---
+title: "CBIOS_Project"
+author: "Keenan Anderson-Fears"
+date: "10/22/2020"
+output: pdf_document
+---
+This project picks up from where the CBIOS_Practicum_Project.ipynb code left off.
+```{r}
+# Import our libraries and set the seed
+library(glmnet)
+library(dplyr)
+library(tidyr)
+library(data.table)
+library(ggplot2)
+
+set.seed(123)
+
+data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Full_Data.csv", header=T, sep=",")
+```
+
+```{r}
+smp_size <- floor(0.75*nrow(data))
+train_ind <- sample(seq_len(nrow(data)), size=smp_size)
+train <- data[train_ind,]
+test <- data[-train_ind,]
+```
+
+```{r}
+X_train <- as.matrix(train %>% select(3:1039))
+Y_train <- as.matrix(train %>% select(2))
+```
+
+```{r}
+fit <- glmnet(X_train, Y_train, "binomial")
+```
+
+```{r}
+plot(fit, xvar="lambda", label=T)
+```
+
+```{r}
+print(fit)
+```
+
+```{r}
+cvfit <- cv.glmnet(X_train, Y_train)
+plot(cvfit)
+```
+
+```{r}
+cvfit$lambda.1se
+```
+
+
+
+
+
+
+
