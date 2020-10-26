@@ -15,42 +15,55 @@ library(ggplot2)
 
 set.seed(123)
 
-data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Full_Data.csv", header=T, sep=",")
+data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Practicum/CBIOS_Full_Data.csv", header=T, sep=",")
 ```
 
 ```{r}
+# Select a sample corresponding to 75% of the total bacterial isolates
 smp_size <- floor(0.75*nrow(data))
-train_ind <- sample(seq_len(nrow(data)), size=smp_size)
-train <- data[train_ind,]
+# Using the sample function we select a random group of isolates from our data in the amount equal to our sample size
+train_ind <- sample(seq_len(nrow(data)), size=smp_size) 
+# From these indecies we build our testing and train sets
+train <- data[train_ind,] 
 test <- data[-train_ind,]
 ```
 
 ```{r}
+# Specify our predictors
 X_train <- as.matrix(train %>% select(3:1039))
 Y_train <- as.matrix(train %>% select(2))
 ```
 
 ```{r}
+# Fit our model
 fit <- glmnet(X_train, Y_train, "binomial")
 ```
 
 ```{r}
+# Plot our Lasso Path showing the % deviation of the model associated with features based upon an increasing lambda value
 plot(fit, xvar="lambda", label=T)
 ```
 
 ```{r}
+# Print the values associated with the path
 print(fit)
 ```
 
 ```{r}
+# Fit and plot a cross validation for determining the ideal lambda
 cvfit <- cv.glmnet(X_train, Y_train)
 plot(cvfit)
 ```
 
 ```{r}
+# Print the minimum lambda and 1 standard deviation of lambda associated with the lowest mean square error
 cvfit$lambda.1se
+cvfit$lambda.min
 ```
 
+```{r}
+
+```
 
 
 
