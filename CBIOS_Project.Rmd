@@ -12,6 +12,7 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 library(ggplot2)
+library(VariableScreening)
 
 set.seed(123)
 
@@ -32,6 +33,12 @@ test <- data[-train_ind,]
 # Specify our predictors
 X_train <- as.matrix(train %>% select(3:1039))
 Y_train <- as.matrix(train %>% select(2))
+```
+
+```{r}
+screenResults <- screenIID(X_train, Y_train, method="SIRS")
+rank <- screenResults$rank
+print(which(rank<=100))
 ```
 
 ```{r}
