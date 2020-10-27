@@ -5,7 +5,7 @@ date: "10/22/2020"
 output: pdf_document
 ---
 This project picks up from where the CBIOS_Practicum_Project.ipynb code left off.
-```{r}
+```{r, results = 'hide'}
 # Import our libraries and set the seed
 library(glmnet)
 library(dplyr)
@@ -17,9 +17,7 @@ library(VariableScreening)
 set.seed(123)
 
 data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Practicum/CBIOS_Full_Data.csv", header=T, sep=",")
-```
 
-```{r}
 # Select a sample corresponding to 75% of the total bacterial isolates
 smp_size <- floor(0.75*nrow(data))
 # Using the sample function we select a random group of isolates from our data in the amount equal to our sample size
@@ -27,53 +25,153 @@ train_ind <- sample(seq_len(nrow(data)), size=smp_size)
 # From these indecies we build our testing and train sets
 train <- data[train_ind,] 
 test <- data[-train_ind,]
-```
 
-```{r}
 # Specify our predictors
 X_train <- as.matrix(train %>% select(3:1039))
 Y_train <- as.matrix(train %>% select(2))
+
+# Screen using SIRS method
+screenResults1 <- screenIID(X_train, Y_train, method="SIRS")
+rank1 <- screenResults1$rank
+
+# Screen using the MV-SISNY method
+screenResults2 <- screenIID(X_train, Y_train, method="MV-SIS-NY")
+rank2 <- screenResults2$rank
+
+# Screen using the MV-SIS method
+screenResults3 <- screenIID(X_train, Y_train, method="MV-SIS")
+rank3 <- screenResults3$rank
+```
+
+###### Of Note ######
+Each model continues to incorporate each of the encoded class features so that the underlying data can remain intact, as without them the original data could not be concatinated since each experiment is seperate with no underlying correlations
+```{r}
+# Top 345, P/log(P), hits from each screening
+mvnyscreen <- which(rank2<=345)
+mvscreen <- which(rank3<=345)
+sisscreen <- which(rank1<=345)
+
+# We then create a union of all features
+onetwo <- intersect(sisscreen, mvnyscreen)
+twothree <- intersect(mvnyscreen, mvscreen)
+unionofall <- intersect(onetwo, twothree)
 ```
 
 ```{r}
-screenResults <- screenIID(X_train, Y_train, method="SIRS")
-rank <- screenResults$rank
-print(which(rank<=100))
+# The  features from the MV-SIS-NY selection method followed by subsequent lasso path and cross validation
+X_train_mvnyscreen <- subset(X_train, TRUE, c(mvnyscreen))
+
+fitmvnyscreen <- glmnet(X_train_mvnyscreen, Y_train, "binomial")
+cvfitmvnyscreen <- cv.glmnet(X_train_mvnyscreen, Y_train)
+
+plot(fitmvnyscreen, xvar="lambda", label = T)
+plot(cvfitmvnyscreen)
+
+cvfitmvnyscreen$lambda.1se
+cvfitmvnyscreen$lambda.min
 ```
 
 ```{r}
-# Fit our model
+# The  features from the MV-SIS selection method followed by subsequent lasso path and cross validation
+X_train_mvscreen <- subset(X_train, TRUE, c(mvscreen))
+
+fitmvscreen <- glmnet(X_train_mvscreen, Y_train, "binomial")
+cvfitmvscreen <- cv.glmnet(X_train_mvscreen, Y_train)
+
+plot(fitmvscreen, xvar="lambda", label = T)
+plot(cvfitmvscreen)
+
+cvfitmvscreen$lambda.1se
+cvfitmvscreen$lambda.min
+```
+
+```{r}
+# The  features from the SIS selection method followed by subsequent lasso path and cross validation
+X_train_sisscreen <- subset(X_train, TRUE, c(sisscreen))
+
+fitsisscreen <- glmnet(X_train_sisscreen, Y_train, "binomial")
+cvfitsisscreen <- cv.glmnet(X_train_sisscreen, Y_train)
+
+plot(fitsisscreen, xvar="lambda", label = T)
+plot(cvfitsisscreen)
+
+cvfitsisscreen$lambda.1se
+cvfitsisscreen$lambda.min
+```
+
+```{r}
+# The union of all features from the three selection methods followed by subsequent lasso path and cross validation
+X_train_all <- subset(X_train, TRUE, c(unionofall))
+
+fitunionofallscreens <- glmnet(X_train_all, Y_train, "binomial")
+cvfitunionofall <- cv.glmnet(X_train_all, Y_train)
+
+plot(fitunionofallscreens, xvar="lambda", label = T)
+plot(cvfitunionofall)
+
+cvfitunionofall$lambda.1se
+cvfitunionofall$lambda.min
+```
+
+```{r}
+# For our last model we perform no screening at all and go right into the lasso path and cross validation with all 1039 predictors
 fit <- glmnet(X_train, Y_train, "binomial")
-```
 
-```{r}
 # Plot our Lasso Path showing the % deviation of the model associated with features based upon an increasing lambda value
-plot(fit, xvar="lambda", label=T)
-```
+plot(fit, xvar="lambda")
 
-```{r}
-# Print the values associated with the path
-print(fit)
-```
-
-```{r}
 # Fit and plot a cross validation for determining the ideal lambda
 cvfit <- cv.glmnet(X_train, Y_train)
 plot(cvfit)
-```
 
-```{r}
 # Print the minimum lambda and 1 standard deviation of lambda associated with the lowest mean square error
 cvfit$lambda.1se
 cvfit$lambda.min
 ```
 
-```{r}
+```{r, results = 'hide'}
+# Now we look at each of the actual coefficients in each of the models at their respective minimum lambda values
+Model1 <- as.data.frame(summary(coef.glmnet(cvfitmvnyscreen, s="lambda.min")))
+Model2 <- as.data.frame(summary(coef.glmnet(cvfitmvscreen, s="lambda.min")))
+Model3 <- as.data.frame(summary(coef.glmnet(cvfitsisscreen, s="lambda.min")))
+Model4 <- as.data.frame(summary(coef.glmnet(cvfitunionofall, s="lambda.min")))
+Model5 <- as.data.frame(summary(coef.glmnet(cvfit, s="lambda.min")))
 
+a <- as.data.frame(unlist(colnames(data[,Model1$i]), use.names=F), row.names=NULL)
+colnames(a, do.NULL = TRUE)
+colnames(a) <- "Name"
+b <- as.data.frame(unlist(colnames(data[,Model2$i]), use.names=F), row.names=NULL)
+colnames(b, do.NULL = TRUE)
+colnames(b) <- "Name"
+c <- as.data.frame(unlist(colnames(data[,Model3$i]), use.names=F), row.names=NULL) # Removed
+colnames(c, do.NULL = TRUE)
+colnames(c) <- "Name"
+d <- as.data.frame(unlist(colnames(data[,Model4$i]), use.names=F), row.names=NULL) # Removed
+e <- as.data.frame(unlist(colnames(data[,Model5$i]), use.names=F), row.names=NULL)
+colnames(e, do.NULL = TRUE)
+colnames(e) <- "Name"
 ```
 
+```{r}
+# We then look at the overlap between the three main screening methods, MV-SIS-NY, MV-SIS & SIS
+f <- merge(a, b, by="Name")
+g <- merge(b, c, by="Name")
+h <- merge(a, c, by="Name")
+i <- merge(a, e, by="Name")
+j <- merge(b, e, by="Name")
+```
+The results from out analysis are avialble in pdf format form the GitHub as well as in an excell spreadsheet
+detailing the minimum and 1 standard deviation lambda values, number of features & list of features for each
+screening technique.
 
+Following an examination of the features present within each model we found that each model varied
+substantially from the next and as such the SIS and Union models were cut from future work as the data did not
+conform to the requirements of the former nor the latter. 
 
+Similarly the model composed of all features selected only a single similar feature to the MV-SIS model and
+none to the MV-SIS-NY model. Thus this model was rejected as well for further development.
 
-
-
+The two models for consideration therefore are the MV-SIS and MV-SIS-NY screened models. Therefore, the future
+two models contain only the subset of features screened for and present at the minimum value for lambda for
+each corresponding lasso path & cross validation along with the catagorical features pertaining to class of
+bacteria/antibiotic to preserve underlying correlation.
