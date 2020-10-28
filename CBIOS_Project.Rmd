@@ -57,63 +57,63 @@ twothree <- intersect(mvnyscreen, mvscreen)
 unionofall <- intersect(onetwo, twothree)
 ```
 
-```{r}
+```{r, results = 'hide'}
 # The  features from the MV-SIS-NY selection method followed by subsequent lasso path and cross validation
 X_train_mvnyscreen <- subset(X_train, TRUE, c(mvnyscreen))
 
 fitmvnyscreen <- glmnet(X_train_mvnyscreen, Y_train, "binomial")
 cvfitmvnyscreen <- cv.glmnet(X_train_mvnyscreen, Y_train)
 
-plot(fitmvnyscreen, xvar="lambda", label = T)
+plot(fitmvnyscreen, xvar="lambda")
 plot(cvfitmvnyscreen)
 
 cvfitmvnyscreen$lambda.1se
 cvfitmvnyscreen$lambda.min
 ```
 
-```{r}
+```{r, results = 'hide'}
 # The  features from the MV-SIS selection method followed by subsequent lasso path and cross validation
 X_train_mvscreen <- subset(X_train, TRUE, c(mvscreen))
 
 fitmvscreen <- glmnet(X_train_mvscreen, Y_train, "binomial")
 cvfitmvscreen <- cv.glmnet(X_train_mvscreen, Y_train)
 
-plot(fitmvscreen, xvar="lambda", label = T)
+plot(fitmvscreen, xvar="lambda")
 plot(cvfitmvscreen)
 
 cvfitmvscreen$lambda.1se
 cvfitmvscreen$lambda.min
 ```
 
-```{r}
+```{r, results = 'hide'}
 # The  features from the SIS selection method followed by subsequent lasso path and cross validation
 X_train_sisscreen <- subset(X_train, TRUE, c(sisscreen))
 
 fitsisscreen <- glmnet(X_train_sisscreen, Y_train, "binomial")
 cvfitsisscreen <- cv.glmnet(X_train_sisscreen, Y_train)
 
-plot(fitsisscreen, xvar="lambda", label = T)
+plot(fitsisscreen, xvar="lambda")
 plot(cvfitsisscreen)
 
 cvfitsisscreen$lambda.1se
 cvfitsisscreen$lambda.min
 ```
 
-```{r}
+```{r, results = 'hide'}
 # The union of all features from the three selection methods followed by subsequent lasso path and cross validation
 X_train_all <- subset(X_train, TRUE, c(unionofall))
 
 fitunionofallscreens <- glmnet(X_train_all, Y_train, "binomial")
 cvfitunionofall <- cv.glmnet(X_train_all, Y_train)
 
-plot(fitunionofallscreens, xvar="lambda", label = T)
+plot(fitunionofallscreens, xvar="lambda")
 plot(cvfitunionofall)
 
 cvfitunionofall$lambda.1se
 cvfitunionofall$lambda.min
 ```
 
-```{r}
+```{r, results = 'hide'}
 # For our last model we perform no screening at all and go right into the lasso path and cross validation with all 1039 predictors
 fit <- glmnet(X_train, Y_train, "binomial")
 
@@ -152,7 +152,7 @@ colnames(e, do.NULL = TRUE)
 colnames(e) <- "Name"
 ```
 
-```{r}
+```{r, results = 'hide'}
 # We then look at the overlap between the three main screening methods, MV-SIS-NY, MV-SIS & SIS
 f <- merge(a, b, by="Name")
 g <- merge(b, c, by="Name")
@@ -175,3 +175,17 @@ The two models for consideration therefore are the MV-SIS and MV-SIS-NY screened
 two models contain only the subset of features screened for and present at the minimum value for lambda for
 each corresponding lasso path & cross validation along with the catagorical features pertaining to class of
 bacteria/antibiotic to preserve underlying correlation.
+
+```{r, results = 'hide'}
+MVNY_Model <- cbind(data[,Model1$i], data[,1034:1039], data[,2])
+MV_Model <- cbind(data[,Model2$i], data[,1034:1039], data[,2])
+MVNY_Model <- MVNY_Model[,2:24]
+colnames(MVNY_Model, do.NULL = TRUE)
+colnames(MVNY_Model)[23] <- "AMR"
+MV_Model <- MV_Model[,2:39]
+colnames(MV_Model, do.NULL = TRUE)
+colnames(MV_Model)[38] <- "AMR"
+write.table(MVNY_Model, file="/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MVNY_Screened_AMR.csv",quote=F, sep="\t",row.names=F)
+write.table(MV_Model, file="/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MV_Screened_AMR.csv",quote=F, sep="\t",row.names=F)
+```
+
