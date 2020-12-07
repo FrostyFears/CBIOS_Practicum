@@ -13,18 +13,27 @@ library(tidyr)
 library(data.table)
 library(ggplot2)
 library(VariableScreening)
+```
 
+```{r}
 set.seed(123)
 
 data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Practicum/CBIOS_Full_Data.csv", header=T, sep=",")
 
+#Changing name of variables to make them smaller by IDing them 3-1039
+
+data2 <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Practicum/CBIOS_Full_Data.csv", header=T, sep=",")
+colnames(data2)<-as.character(seq(1,1039,by=1))
+colnames(data2)[colnames(data2) %in% c("1","2")] <- c("X","AMR")
+
+
 # Select a sample corresponding to 75% of the total bacterial isolates
-smp_size <- floor(0.75*nrow(data))
+smp_size <- floor(0.75*nrow(data2))
 # Using the sample function we select a random group of isolates from our data in the amount equal to our sample size
-train_ind <- sample(seq_len(nrow(data)), size=smp_size) 
+train_ind <- sample(seq_len(nrow(data2)), size=smp_size) 
 # From these indecies we build our testing and train sets
-train <- data[train_ind,] 
-test <- data[-train_ind,]
+train <- data2[train_ind,] 
+test <- data2[-train_ind,]
 
 # Specify our predictors
 X_train <- as.matrix(train %>% select(3:1039))
@@ -57,6 +66,235 @@ twothree <- intersect(mvnyscreen, mvscreen)
 unionofall <- intersect(onetwo, twothree)
 ```
 
+```{r}
+# And then we check the union of the various screens to see the overlap in feature screening techniques
+data_mvny <- data2[,mvnyscreen]
+data_mv <- data2[,mvscreen]
+data_sis <- data2[,sisscreen]
+data_union <- data2[,unionofall]
+```
+
+
+
+```{r}
+### Running and plotting correlations via spearman
+a <- cor(data_mvny, method="spearman")
+b <- cor(data_mv, method="spearman")
+c <- cor(data_sis, method="spearman")
+d <- cor(data_union, method="spearman")
+
+library(corrplot)
+corrplot(a, type="upper", tl.pos="td", tl.cex=0.2, method="color")
+corrplot(b, type="upper", tl.pos="td", tl.cex=0.2, method="color")
+corrplot(c, type="upper", tl.pos="td", tl.cex=0.2, method="color")
+corrplot(d, type="upper", tl.pos="td", tl.cex=0.2, method="color")
+```
+
+```{r}
+pcor(data_mvny)
+lst<-list()
+total <- 1
+for(i in names(data_mvny)){
+  for(j in names(data_mvny)){
+    if(i != j){
+      index.i<- which(colnames(data_mvny)==i)
+      index.j<- which(colnames(data_mvny)==j)
+      test <- pcor.test(data_mvny[index.i],data_mvny[index.j],data_mvny[,-c(index.i,index.j)])
+      if(test$p.value <= 0.05){
+        vect <- c(i,j,test$estimate,test$p.value,test$statistic,test$n,test$gp,test$Method)
+        lst[[total]]<-vect
+        total<-total+1
+      }
+    }
+  }
+} 
+
+mvny_data_partial <- data.frame(matrix(unlist(lst),nrow = length(lst),byrow=T))
+colnames(mvny_data_partial) <- c("feature1","feature2","estimate","pvalue","statistic","n","gp","method")
+mvny_data_partial
+
+
+```
+
+
+```{r}
+pcor(data_mv)
+lst<-list()
+total <- 1
+for(i in names(data_mv)){
+  for(j in names(data_mv)){
+    if(i != j){
+      index.i<- which(colnames(data_mv)==i)
+      index.j<- which(colnames(data_mv)==j)
+      test <- pcor.test(data_mv[index.i],data_mv[index.j],data_mv[,-c(index.i,index.j)])
+      if(test$p.value <= 0.05){
+        vect <- c(i,j,test$estimate,test$p.value,test$statistic,test$n,test$gp,test$Method)
+        lst[[total]]<-vect
+        total<-total+1
+      }
+    }
+  }
+} 
+
+mv_data_partial <- data.frame(matrix(unlist(lst),nrow = length(lst),byrow=T))
+colnames(mv_data_partial) <- c("feature1","feature2","estimate","pvalue","statistic","n","gp","method")
+mv_data_partial
+
+
+```
+
+
+```{r}
+pcor(data_sis)
+lst<-list()
+total <- 1
+for(i in names(data_sis)){
+  for(j in names(data_sis)){
+    if(i != j){
+      index.i<- which(colnames(data_sis)==i)
+      index.j<- which(colnames(data_sis)==j)
+      test <- pcor.test(data_sis[index.i],data_sis[index.j],data_sis[,-c(index.i,index.j)])
+      if(test$p.value <= 0.05){
+        vect <- c(i,j,test$estimate,test$p.value,test$statistic,test$n,test$gp,test$Method)
+        lst[[total]]<-vect
+        total<-total+1
+      }
+    }
+  }
+} 
+
+sis_data_partial <- data.frame(matrix(unlist(lst),nrow = length(lst),byrow=T))
+colnames(sis_data_partial) <- c("feature1","feature2","estimate","pvalue","statistic","n","gp","method")
+sis_data_partial
+
+
+```
+
+
+
+```{r}
+# Obtain features that are shared across the three selections with significant correlations
+
+dupsBetweenGroups <- function (df, idcol) {
+    # df: the data frame
+    # idcol: the column which identifies the group each row belongs to
+
+    # Get the data columns to use for finding matches
+    datacols <- setdiff(names(df), idcol)
+
+    # Sort by idcol, then datacols. Save order so we can undo the sorting later.
+    sortorder <- do.call(order, df)
+    df <- df[sortorder,]
+
+    # Find duplicates within each id group (first copy not marked)
+    dupWithin <- duplicated(df)
+
+    # With duplicates within each group filtered out, find duplicates between groups. 
+    # Need to scan up and down with duplicated() because first copy is not marked.
+    dupBetween = rep(NA, nrow(df))
+    dupBetween[!dupWithin] <- duplicated(df[!dupWithin,datacols])
+    dupBetween[!dupWithin] <- duplicated(df[!dupWithin,datacols], fromLast=TRUE) | dupBetween[!dupWithin]
+
+    # ============= Replace NA's with previous non-NA value ==============
+    # This is why we sorted earlier - it was necessary to do this part efficiently
+
+    # Get indexes of non-NA's
+    goodIdx <- !is.na(dupBetween)
+
+    # These are the non-NA values from x only
+    # Add a leading NA for later use when we index into this vector
+    goodVals <- c(NA, dupBetween[goodIdx])
+
+    # Fill the indices of the output vector with the indices pulled from
+    # these offsets of goodVals. Add 1 to avoid indexing to zero.
+    fillIdx <- cumsum(goodIdx)+1
+
+    # The original vector, now with gaps filled
+    dupBetween <- goodVals[fillIdx]
+
+    # Undo the original sort
+    dupBetween[sortorder] <- dupBetween
+
+    # Return the vector of which entries are duplicated across groups
+    return(dupBetween)
+}
+
+mvny_data_partial$Coder <- "MVNY"
+mv_data_partial$Coder <- "MV"
+sis_data_partial$Coder <- "SIS"
+
+overlap_selection <- rbind(mvny_data_partial,mv_data_partial,sis_data_partial)
+#overlap_screens_df <- overlap_screens_df[,c("Coder","feature1","feature2","estimate","pvalue")]
+overlap_screens_df_allthree <- overlap_screens_df_allthree[,c("Coder","feature1","feature2")]
+overlap_screens_df_allthree
+
+dupRows <- dupsBetweenGroups(overlap_screens_df_allthree,"Coder")
+dups_df<-cbind(overlap_screens_df_allthree,dup=dupRows)
+dups_df
+dups_true<-dups_df[dups_df$dup=='TRUE',]
+dups_true_sorted<-dups_true[with(dups_true,order(dups_true$feature1,dups_true$feature2)),]
+dups_true_sorted
+
+count<-1
+total<-1
+lst<-list()
+tempf1<-""
+tempf2<-""
+for(row in 1:nrow(dups_true_sorted)){
+  currf1<-dups_true_sorted[row,"feature1"]
+  currf2<-dups_true_sorted[row,"feature2"]
+  if(tempf1=="" && tempf2==""){
+    tempf1=currf1
+    tempf2=currf2
+  } 
+  else if(currf1==tempf1 && currf2==tempf2){
+    total<-total+1
+    tempf1=currf1
+    tempf2=currf2
+  }
+  else{
+    if(total==3){
+      lst[[count]]<-c(mvny_data_partial[mvny_data_partial$feature1==tempf1 & mvny_data_partial$feature2==tempf2,]$Coder,
+paste(mvny_data_partial[mvny_data_partial$feature1==tempf1 & mvny_data_partial$feature2==tempf2,]$feature1,",",mvny_data_partial[mvny_data_partial$feature1==tempf1 & mvny_data_partial$feature2==tempf2,]$feature2),
+mvny_data_partial[mvny_data_partial$feature1==tempf1 & mvny_data_partial$feature2==tempf2,]$feature1,
+mvny_data_partial[mvny_data_partial$feature1==tempf1 & mvny_data_partial$feature2==tempf2,]$feature2,
+mvny_data_partial[mvny_data_partial$feature1==tempf1 & mvny_data_partial$feature2==tempf2,]$estimate,
+mvny_data_partial[mvny_data_partial$feature1==tempf1 & mvny_data_partial$feature2==tempf2,]$pvalue)
+count<-count+1
+
+lst[[count]]<-c(mv_data_partial[mv_data_partial$feature1==tempf1 & mv_data_partial$feature2==tempf2,]$Coder,
+paste(mv_data_partial[mv_data_partial$feature1==tempf1 & mv_data_partial$feature2==tempf2,]$feature1,",",mv_data_partial[mv_data_partial$feature1==tempf1 & mv_data_partial$feature2==tempf2,]$feature2),
+mv_data_partial[mv_data_partial$feature1==tempf1 & mv_data_partial$feature2==tempf2,]$feature1,
+mv_data_partial[mv_data_partial$feature1==tempf1 & mv_data_partial$feature2==tempf2,]$feature2,
+mv_data_partial[mv_data_partial$feature1==tempf1 & mv_data_partial$feature2==tempf2,]$estimate,
+mv_data_partial[mv_data_partial$feature1==tempf1 & mv_data_partial$feature2==tempf2,]$pvalue)
+count<-count+1
+
+lst[[count]]<-c(sis_data_partial[sis_data_partial$feature1==tempf1 & sis_data_partial$feature2==tempf2,]$Coder,
+paste(sis_data_partial[sis_data_partial$feature1==tempf1 & sis_data_partial$feature2==tempf2,]$feature1,",",sis_data_partial[sis_data_partial$feature1==tempf1 & sis_data_partial$feature2==tempf2,]$feature2),
+sis_data_partial[sis_data_partial$feature1==tempf1 & sis_data_partial$feature2==tempf2,]$feature1,
+sis_data_partial[sis_data_partial$feature1==tempf1 & sis_data_partial$feature2==tempf2,]$feature2,
+sis_data_partial[sis_data_partial$feature1==tempf1 & sis_data_partial$feature2==tempf2,]$estimate,
+sis_data_partial[sis_data_partial$feature1==tempf1 & sis_data_partial$feature2==tempf2,]$pvalue)
+count<-count+1
+      }
+    total<-1
+    tempf1=currf1
+    tempf2=currf2
+  }
+}
+
+lst
+
+shared_features_among_screening <- data.frame(matrix(unlist(lst),nrow = length(lst),byrow=T))
+colnames(shared_features_among_screening) <- c("screen_method","features","feature1","feature2","estimate","pvalue")
+shared_features_among_screening
+
+#140 features shared
+```
+
+
+
 ```{r, results = 'hide'}
 # The  features from the MV-SIS-NY selection method followed by subsequent lasso path and cross validation
 X_train_mvnyscreen <- subset(X_train, TRUE, c(mvnyscreen))
@@ -64,8 +302,8 @@ X_train_mvnyscreen <- subset(X_train, TRUE, c(mvnyscreen))
 fitmvnyscreen <- glmnet(X_train_mvnyscreen, Y_train, "binomial")
 cvfitmvnyscreen <- cv.glmnet(X_train_mvnyscreen, Y_train)
 
-plot(fitmvnyscreen, xvar="lambda")
-plot(cvfitmvnyscreen)
+#plot(fitmvnyscreen, xvar="lambda")
+#plot(cvfitmvnyscreen)
 
 cvfitmvnyscreen$lambda.1se
 cvfitmvnyscreen$lambda.min
@@ -78,8 +316,8 @@ X_train_mvscreen <- subset(X_train, TRUE, c(mvscreen))
 fitmvscreen <- glmnet(X_train_mvscreen, Y_train, "binomial")
 cvfitmvscreen <- cv.glmnet(X_train_mvscreen, Y_train)
 
-plot(fitmvscreen, xvar="lambda")
-plot(cvfitmvscreen)
+#plot(fitmvscreen, xvar="lambda")
+#plot(cvfitmvscreen)
 
 cvfitmvscreen$lambda.1se
 cvfitmvscreen$lambda.min
@@ -92,8 +330,8 @@ X_train_sisscreen <- subset(X_train, TRUE, c(sisscreen))
 fitsisscreen <- glmnet(X_train_sisscreen, Y_train, "binomial")
 cvfitsisscreen <- cv.glmnet(X_train_sisscreen, Y_train)
 
-plot(fitsisscreen, xvar="lambda")
-plot(cvfitsisscreen)
+#plot(fitsisscreen, xvar="lambda")
+#plot(cvfitsisscreen)
 
 cvfitsisscreen$lambda.1se
 cvfitsisscreen$lambda.min
@@ -106,8 +344,8 @@ X_train_all <- subset(X_train, TRUE, c(unionofall))
 fitunionofallscreens <- glmnet(X_train_all, Y_train, "binomial")
 cvfitunionofall <- cv.glmnet(X_train_all, Y_train)
 
-plot(fitunionofallscreens, xvar="lambda")
-plot(cvfitunionofall)
+#plot(fitunionofallscreens, xvar="lambda")
+#plot(cvfitunionofall)
 
 cvfitunionofall$lambda.1se
 cvfitunionofall$lambda.min
@@ -118,11 +356,11 @@ cvfitunionofall$lambda.min
 fit <- glmnet(X_train, Y_train, "binomial")
 
 # Plot our Lasso Path showing the % deviation of the model associated with features based upon an increasing lambda value
-plot(fit, xvar="lambda")
+#plot(fit, xvar="lambda")
 
 # Fit and plot a cross validation for determining the ideal lambda
 cvfit <- cv.glmnet(X_train, Y_train)
-plot(cvfit)
+#plot(cvfit)
 
 # Print the minimum lambda and 1 standard deviation of lambda associated with the lowest mean square error
 cvfit$lambda.1se
@@ -137,19 +375,19 @@ Model3 <- as.data.frame(summary(coef.glmnet(cvfitsisscreen, s="lambda.min")))
 Model4 <- as.data.frame(summary(coef.glmnet(cvfitunionofall, s="lambda.min")))
 Model5 <- as.data.frame(summary(coef.glmnet(cvfit, s="lambda.min")))
 
-a <- as.data.frame(unlist(colnames(data[,Model1$i]), use.names=F), row.names=NULL)
-colnames(a, do.NULL = TRUE)
-colnames(a) <- "Name"
-b <- as.data.frame(unlist(colnames(data[,Model2$i]), use.names=F), row.names=NULL)
-colnames(b, do.NULL = TRUE)
-colnames(b) <- "Name"
-c <- as.data.frame(unlist(colnames(data[,Model3$i]), use.names=F), row.names=NULL) # Removed
-colnames(c, do.NULL = TRUE)
-colnames(c) <- "Name"
-d <- as.data.frame(unlist(colnames(data[,Model4$i]), use.names=F), row.names=NULL) # Removed
-e <- as.data.frame(unlist(colnames(data[,Model5$i]), use.names=F), row.names=NULL)
-colnames(e, do.NULL = TRUE)
-colnames(e) <- "Name"
+#a <- as.data.frame(unlist(colnames(data[,Model1$i]), use.names=F), row.names=NULL)
+#colnames(a, do.NULL = TRUE)
+#colnames(a) <- "Name"
+#b <- as.data.frame(unlist(colnames(data[,Model2$i]), use.names=F), row.names=NULL)
+#colnames(b, do.NULL = TRUE)
+#colnames(b) <- "Name"
+#c <- as.data.frame(unlist(colnames(data[,Model3$i]), use.names=F), row.names=NULL) # Removed
+#colnames(c, do.NULL = TRUE)
+#colnames(c) <- "Name"
+#d <- as.data.frame(unlist(colnames(data[,Model4$i]), use.names=F), row.names=NULL) # Removed
+#e <- as.data.frame(unlist(colnames(data[,Model5$i]), use.names=F), row.names=NULL)
+#colnames(e, do.NULL = TRUE)
+#colnames(e) <- "Name"
 ```
 
 ```{r, results = 'hide'}
@@ -177,15 +415,278 @@ each corresponding lasso path & cross validation along with the catagorical feat
 bacteria/antibiotic to preserve underlying correlation.
 
 ```{r, results = 'hide'}
-MVNY_Model <- cbind(data[,Model1$i], data[,1034:1039], data[,2])
-MV_Model <- cbind(data[,Model2$i], data[,1034:1039], data[,2])
+MVNY_Model <- cbind(data2[,Model1$i], data2[,1034:1039], data2[,2])
+MV_Model <- cbind(data2[,Model2$i], data2[,1034:1039], data2[,2])
 MVNY_Model <- MVNY_Model[,2:24]
 colnames(MVNY_Model, do.NULL = TRUE)
 colnames(MVNY_Model)[23] <- "AMR"
 MV_Model <- MV_Model[,2:39]
 colnames(MV_Model, do.NULL = TRUE)
 colnames(MV_Model)[38] <- "AMR"
-write.table(MVNY_Model, file="/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MVNY_Screened_AMR.csv",quote=F, sep="\t",row.names=F)
-write.table(MV_Model, file="/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MV_Screened_AMR.csv",quote=F, sep="\t",row.names=F)
+#write.table(MVNY_Model, file="/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MVNY_Screened_AMR.csv",quote=F, sep="\t",row.names=F)
+#write.table(MV_Model, file="/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MV_Screened_AMR.csv",quote=F, sep="\t",row.names=F)
 ```
+
+```{r}
+corrplot(cor(MVNY_Model, method="spearman"), tl.pos="td", tl.cex=0.6, method="color", type="upper")
+corrplot(cor(MV_Model, method="spearman"), tl.pos="td", tl.cex=0.5, method="color", type="upper")
+```
+
+
+
+
+```{r}
+library("ppcor")
+pcor(MVNY_Model)
+lst<-list()
+total <- 1
+for(i in names(MVNY_Model)){
+  for(j in names(MVNY_Model)){
+    if(i != j){
+      index.i<- which(colnames(MVNY_Model)==i)
+      index.j<- which(colnames(MVNY_Model)==j)
+      test <- pcor.test(MVNY_Model[index.i],MVNY_Model[index.j],MVNY_Model[,-c(index.i,index.j)])
+      if(test$p.value <= 0.05){
+        vect <- c(i,j,test$estimate,test$p.value,test$statistic,test$n,test$gp,test$Method)
+        lst[[total]]<-vect
+        total<-total+1
+      }
+    }
+  }
+} 
+
+mvny_partial <- data.frame(matrix(unlist(lst),nrow = length(lst),byrow=T))
+colnames(mvny_partial) <- c("feature1","feature2","estimate","pvalue","statistic","n","gp","method")
+mvny_partial
+```
+
+
+
+```{r}
+pcor(MV_Model)
+mv_lst<-list()
+total <- 1
+for(i in names(MV_Model)){
+  for(j in names(MV_Model)){
+    if(i != j){
+      index.i<- which(colnames(MV_Model)==i)
+      index.j<- which(colnames(MV_Model)==j)
+      test <- pcor.test(MV_Model[index.i],MV_Model[index.j],MV_Model[,-c(index.i,index.j)])
+      if(test$p.value <= 0.05){
+        vect <- c(i,j,test$estimate,test$p.value,test$statistic,test$n,test$gp,test$Method)
+        mv_lst[[total]]<-vect
+        total<-total+1
+      }
+    }
+  }
+} 
+
+mv_partial <- data.frame(matrix(unlist(mv_lst),nrow = length(mv_lst),byrow=T))
+colnames(mv_partial) <- c("feature1","feature2","estimate","pvalue","statistic","n","gp","method")
+mv_partial
+```
+
+
+```{r}
+#Obtain features shared scross selection methods
+mvny_partial$Coder <- "MVNY"
+mv_partial$Coder <- "MV"
+
+overlap_selections_df <- rbind(mvny_partial,mv_partial)
+overlap_selections_df
+#overlap_screens_df <- overlap_screens_df[,c("Coder","feature1","feature2","estimate","pvalue")]
+overlap_selections_df <- overlap_selections_df[,c("Coder","feature1","feature2")]
+overlap_selections_df
+
+dupRows_select <- dupsBetweenGroups(overlap_selections_df,"Coder")
+dups_df_select<-cbind(overlap_selections_df,dup=dupRows_select)
+dups_df_select
+dups_true_select<-dups_df_select[dups_df_select$dup=='TRUE',]
+dups_true_sorted_select<-dups_true_select[with(dups_true_select,order(dups_true_select$feature1,dups_true_select$feature2)),]
+dups_true_sorted_select
+
+#zero features shared
+```
+
+
+
+```{r}
+library(e1071)
+MV_Model_Data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MV_Screened_AMR.csv", sep="\t", header=T)
+MVNY_Model_Data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Practicum/MVNY_Screened_AMR.csv", sep="\t", header=T)
+Full_data <- read.csv("/Users/keenananderson-fears/Desktop/CBIOS_Practicum/CBIOS_Full_Data.csv", header=T, sep=",")
+```
+
+#### Model 1 - Full Dataset ####
+```{r}
+set.seed(1234)
+# Select a sample corresponding to 75% of the total bacterial isolates
+smp_size <- floor(0.75*nrow(Full_data))
+# Using the sample function we select a random group of isolates from our data in the amount equal to our sample size
+train_ind <- sample(seq_len(nrow(Full_data)), size=smp_size) 
+# From these indecies we build our testing and train sets
+train <- Full_data[train_ind,] 
+test <- Full_data[-train_ind,]
+
+# Specify our predictors
+X_train <- train %>% select(3:1039)
+Y_train <- train %>% select(2)
+
+# Speficy our testing predictors
+X_test <- test %>% select(3:1039)
+Y_test <- test %>% select(2)
+```
+
+```{r}
+#### Model Using Elastic Net ####
+#lambdas_to_try <- 10^seq(-6, -2, length.out = 100)
+```
+
+```{r}
+#### Model Using SVM ####
+
+```
+
+```{r}
+#### Model Using XGBoost ####
+```
+
+#### Model 2 - MV Screened Dataset ####
+```{r}
+# Select a sample corresponding to 75% of the total bacterial isolates
+smp_size <- floor(0.75*nrow(MV_Model_Data))
+# Using the sample function we select a random group of isolates from our data in the amount equal to our sample size
+train_ind <- sample(seq_len(nrow(MV_Model_Data)), size=smp_size) 
+# From these indecies we build our testing and train sets
+train <- MV_Model_Data[train_ind,] 
+test <- MV_Model_Data[-train_ind,]
+
+# Specify our predictors
+X_train <- train %>% select(1:37)
+Y_train <- train %>% select(38)
+
+# Speficy our testing predictors
+X_test <- test %>% select(1:37)
+Y_test <- test %>% select(38)
+```
+
+```{r}
+#### Model Using Elastic Net ####
+lambdas_to_try <- 10^seq(-6, -2, length.out = 100)
+```
+
+```{r}
+#### Model Using SVM ####
+
+```
+
+```{r}
+#### Model Using XGBoost ####
+```
+
+#### Model 3 - MVNY Screened Dataset ####
+```{r}
+# Select a sample corresponding to 75% of the total bacterial isolates
+smp_size <- floor(0.75*nrow(MVNY_Model_Data))
+# Using the sample function we select a random group of isolates from our data in the amount equal to our sample size
+train_ind <- sample(seq_len(nrow(MVNY_Model_Data)), size=smp_size) 
+# From these indecies we build our testing and train sets
+train <- MVNY_Model_Data[train_ind,] 
+test <- MVNY_Model_Data[-train_ind,]
+
+#Create labels for xgboost
+train_label=as.integer(train[,23])
+test_label<-as.integer(test[,23])
+
+# Specify our predictors
+X_train <- train %>% select(1:22)
+Y_train <- train %>% select(23)
+Y_train_label <- 
+
+# Speficy our testing predictors
+X_test <- test %>% select(1:22)
+Y_test <- test %>% select(23)
+```
+
+
+```{r}
+#### Model Using Elastic Net ####
+#lambdas_to_try <- 10^seq(-6, -2, length.out = 100)
+cv_5 = trainControl(method = "cv", number = 5)
+MVNY_elnet = train(
+  factor(AMR) ~ ., data = train,
+  method = "glmnet",
+  trControl = cv_5
+)
+
+get_best_result = function(caret_fit) {
+  best = which(rownames(caret_fit$results) == rownames(caret_fit$bestTune))
+  best_result = caret_fit$results[best, ]
+  rownames(best_result) = NULL
+  best_result
+}
+```
+
+```{r}
+get_best_result(MVNY_elnet)
+```
+
+```{r}
+#### Model Using SVM ####
+SVM_MVNY_classifier = svm(formula = factor(AMR) ~ ., 
+                 data = train, 
+                 type = 'C-classification', 
+                 kernel = 'radial')
+y_pred = predict(SVM_MVNY_classifier, newdata = X_test)
+cm = table(Y_test[1:nrow(Y_test),], y_pred)
+cm
+```
+
+```{r}
+#### Model Using XGBoost ####
+library(xgboost)
+
+#Convert data.frame to DMatrix
+label = as.integer(train)-1
+
+dtrain <- xgb.DMatrix(data=as.matrix(train),label=as.matrix(as.numeric(train_label)))
+dtest<-xgb.DMatrix(data=as.matrix(test),label=as.matrx(as.numeric(test_label)))
+
+num_class<-2
+
+params=list(
+  booster='gbtree',
+  eta=0.001,
+  max_depth=5,
+  gamma=3,
+  subsample=0.75,
+  colsample_bytree=1,
+  objective='multi:softprob',
+  eval_metric="mlogloss",
+  num_class=num_class
+)                   
+
+
+xgbcv <- xgb.cv(params=params, 
+                  data=dtrain, 
+                  nrounds=1000, 
+                  nfold=5, 
+                  showsd=T, 
+                  stratified=T, 
+                  print_every_n=10, 
+                  early_stopping_rounds=20, 
+                  maximize=F,
+                  verbose=0)
+  
+
+  
+                   
+xgboost(data=as.matrix(X_train),label=as.matrix(Y_train),max.depth=2,eta=1,nthread=2,nrounds=2,objective="binary:logistic")
+
+xgboost(data=as.matrix(X_train),label=as.matrix(Y_train),nrounds=1000,objective="binary:logistic")
+```
+
+
+
+
 
